@@ -1,0 +1,12 @@
+# System files
+.DS_Store
+Thumbs.db
+
+# Binary / large files
+*.pdf
+*.zip
+*.pptx
+
+# Editor
+.vscode/
+.idea/
