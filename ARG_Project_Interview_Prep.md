@@ -331,3 +331,351 @@ Second, I would explore **fine-tuning or few-shot caching**. Instead of putting 
 Third, I would add **streaming responses**. Currently the UI polls for the complete result. If we streamed the AI output, we could surface partial results progressively — showing code quality comments while step alignment is still being processed — which would make the tool feel much faster.
 
 Fourth, I would implement **confidence scoring** — ask the model to rate its own confidence for each comment, and use that score to filter or highlight uncertain results differently on the dashboard.
+
+
+
+# ARG Tool - Technical Breakdown
+
+## 1) System Architecture
+
+`PLTE/tools/ARG` is a Django-based review platform with asynchronous processing via Celery. 
+At a high level, it combines:
+
+- A **web/API layer** to create and track review jobs
+- An **async task layer** to execute heavy review logic
+- A **review engine** that gathers source/log/test context and calls LLM services
+- **Integration layers** for qTest and ReviewBoard
+- A **persistence/reporting layer** for storing review outputs and exporting analytics
+
+### Core Runtime Components
+
+- **Django app root:** `arg/`
+ - `arg/manage.py`: local entry point for Django commands
+ - `arg/arg/settings.py`: project configuration (DB, cache, Celery, auth, etc.)
+ - `arg/arg/urls.py`: route registration into `core`
+- **Application layer:** `arg/core/`
+ - `views.py`: HTTP endpoints for UI/API requests and reporting
+ - `models.py`: persistence models (`Review`, `User`, etc.)
+ - `tasks.py`: Celery tasks executing review jobs
+ - `utils.py`: review-output post-processing (comment metrics/counts)
+- **Review engine + integrations:** `arg/utils/`
+ - `ARG.py`: main orchestration class (`AI_ARG`) for end-to-end review generation
+ - `AI_response.py`: LLM request wrapper/prompt dispatch
+ - `qtest.py`: qTest API helper/client
+ - `rb_itegration.py`: ReviewBoard posting and analytics helpers
+
+### Architectural Style
+
+The project follows a **request-queue-worker** style:
+
+1. Client submits review request to Django endpoint.
+2. Django persists a `Review` record and queues Celery task.
+3. Celery worker executes review pipeline in `AI_ARG`.
+4. Pipeline result is written back to DB as structured JSON (`Review.review`).
+5. Client fetches status/result from review detail endpoints.
+
+This decouples user-facing response times from long-running analysis (remote calls, parsing, LLM requests).
+
+---
+
+## 2) Code Flow & Design
+
+Below is the primary code path for generating one review.
+
+### Step-by-step Execution Flow
+
+1. **Review creation (HTTP/API)**
+  - Endpoints in `arg/core/views.py` (notably `index` and `api`) accept review parameters (workspace, logs, project IDs, options, test IDs).
+  - A `Review` row is created and initialized.
+
+2. **Job dispatch**
+  - Django enqueues `get_reveiw.delay(review_id)` from `arg/core/tasks.py`.
+  - Celery takes over asynchronous execution.
+
+3. **Task bootstrap**
+  - `get_reveiw` loads review metadata from DB.
+  - It invokes `AI_ARG().ARG_tool(...)` from `arg/utils/ARG.py`.
+
+4. **Context acquisition in `AI_ARG.ARG_tool`**
+  - Remote environment access (SSH via `paramiko`) and workspace inspection.
+  - Perforce state interrogation (`p4 opened`, `p4 diff`) to identify changed files and diffs.
+  - Code extraction helpers identify touched functions and relevant snippets.
+
+5. **Test/log enrichment**
+  - qTest integration (`qtest.py`) fetches test-step context tied to the review/testcase.
+  - UT/manual logs are pulled and filtered where needed.
+  - Pipeline builds structured context inputs for AI analysis.
+
+6. **AI analysis pass**
+  - `perform_AI_request` delegates to `AI_response.Ai_Request(...)`.
+  - Prompts from `ARG_Prompts.md` are selected per use case (code verification, FT validation, log checks, action summary, severity tagging).
+  - LLM responses are parsed and merged into a unified result object.
+
+7. **Result finalization**
+  - Output is normalized in task post-processing (`core/utils.get_comments`) to compute FT/AT comment counts and aggregates.
+  - Final structured review JSON is saved in `Review.review`.
+
+8. **Retrieval and optional publication**
+  - Review status/results are served by endpoints like `api_review_detail` and `review_detail`.
+  - Optional ReviewBoard posting is done via `post_to_rb` -> `rb_itegration.py`.
+
+### Mermaid Flow Diagram
+
+```mermaid
+flowchart TD
+   A[Client UI/API Request] --> B[core.views index/api]
+   B --> C[Create Review DB Row]
+   C --> D[Queue Celery Task: get_reveiw]
+   D --> E[core.tasks.get_reveiw]
+   E --> F[AI_ARG.ARG_tool]
+
+   F --> G[Collect Workspace + Diff Context]
+   G --> G1[SSH/Paramiko]
+   G --> G2[Perforce opened/diff]
+   G --> G3[Function/snippet extraction]
+
+   F --> H[Collect Test + Log Context]
+   H --> H1[qTest API via QTestHelper]
+   H --> H2[UT/Manual log parsing]
+
+   G --> I[Build Prompt Inputs]
+   H --> I
+   I --> J[AI_response.Ai_Request]
+   J --> K[LLM Proxy API]
+   K --> L[Structured AI Outputs]
+
+   L --> M[Post-process comment metrics]
+   M --> N[Persist Review.review JSON]
+   N --> O[Review Detail/API Retrieval]
+   N --> P[Optional ReviewBoard Post]
+```
+
+---
+
+## 3) AI Integration Deep Dive (Current State)
+
+### Core Purpose of AI in ARG
+
+The AI layer serves as an **automated technical reviewer** that:
+
+- Evaluates code modifications against expected test intent
+- Cross-checks FT/AT behavior versus logs and qTest steps
+- Produces summarized findings and action items
+- Tags comments by severity to help prioritize remediation
+
+In short, AI turns fragmented engineering artifacts (diffs, tests, logs) into a consumable review report.
+
+Important: the current implementation is mostly **pipeline-style LLM orchestration**, not a full **agent-based** architecture (no planner/executor loop, no graph state machine, and limited tool-selection autonomy at runtime).
+
+### Model/Service Integration
+
+- LLM calls are centralized through `arg/utils/AI_response.py`.
+- Requests are sent to an internal LLM proxy endpoint:
+ - `https://llm-proxy-api.ai.eng.netapp.com/chat/completions`
+- Additional LLM usage appears in task-level helper paths (e.g., `get_atp_review` in `arg/core/tasks.py`).
+
+### Prompting and Task Types
+
+Prompt templates are managed in `arg/utils/ARG_Prompts.md` and used for distinct analysis modes such as:
+
+- `AT_Code_Verify`
+- `AT_FT_Verify`
+- `AT_Logs_Verify`
+- `Manual_log_verify`
+- `Actions_Summary`
+- `Tag_Comments_Severity`
+
+This indicates a **multi-stage prompt pipeline**, where each stage addresses one verification dimension before aggregation.
+
+### Data Pipeline into AI
+
+The effective input pipeline is:
+
+1. **Diff/code acquisition** from workspace and Perforce metadata
+2. **Function-level extraction** of impacted logic
+3. **External test context** from qTest APIs
+4. **Runtime evidence** from UT/manual logs
+5. **Prompt assembly** by analysis type
+6. **LLM inference** via proxy API
+7. **Result merge + normalization** into persisted review JSON
+
+### Output Artifacts
+
+AI outputs are integrated into review fields such as:
+
+- Action summaries
+- FT/qTest and log validation summaries
+- Code anomaly notes
+- Severity-tagged recommendations/comments
+
+These are persisted in DB and surfaced via UI/API/report exports.
+
+### Training/Embedding/Vector Considerations
+
+- The active runtime flow (`core/tasks.py` -> `AI_ARG.ARG_tool`) is **inference-first**, not model-training-first.
+- Utility scripts in `arg/utils/` include experimental/auxiliary embedding/vector logic (for example, `Embed_new.py`), but this is not the primary execution path for standard review jobs.
+- No core training loop or local model fine-tuning pipeline is part of the main Django/Celery review workflow.
+
+---
+
+## 4) How to Implement Agent-Based AI with LangGraph + LangChain
+
+If you want ARG to be truly agent-based, use **LangGraph** as the orchestration/state engine and **LangChain** for model/tool abstractions.
+
+### Target Agentic Design
+
+Use a shared graph state that evolves across specialized nodes:
+
+- `collect_context_node` (workspace, p4 diff, touched functions)
+- `qtest_context_node` (test-case steps and metadata)
+- `log_context_node` (UT/manual logs)
+- `plan_node` (decides which checks are needed)
+- `code_review_node` (code quality and anomalies)
+- `test_alignment_node` (FT/AT vs qTest alignment)
+- `log_validation_node` (runtime evidence checks)
+- `severity_node` (severity/classification)
+- `synthesis_node` (final report normalization)
+- `human_approval_node` (optional checkpoint before posting to RB)
+
+### Mermaid Diagram (Agentic with LangGraph)
+
+```mermaid
+flowchart TD
+   A[Celery Task Start] --> B[Init Graph State]
+   B --> C[collect_context_node]
+   C --> D[qtest_context_node]
+   C --> E[log_context_node]
+   D --> F[plan_node]
+   E --> F
+   F --> G{Need Code Review?}
+   G -->|Yes| H[code_review_node]
+   G -->|No| I[test_alignment_node]
+   H --> I
+   I --> J[log_validation_node]
+   J --> K[severity_node]
+   K --> L[synthesis_node]
+   L --> M{Human Approval Enabled?}
+   M -->|Yes| N[human_approval_node]
+   M -->|No| O[Persist Review.review]
+   N --> O
+   O --> P[Optional ReviewBoard Post]
+```
+
+### Recommended Graph State Schema
+
+Use one typed state object carried through the graph (Python `TypedDict` or Pydantic model), for example:
+
+- `review_id`, `workspace`, `user`, `review_option`, `tcid`
+- `changed_files`, `diff_chunks`, `function_context`
+- `qtest_steps`, `ut_logs`, `manual_logs`
+- `plan`, `tool_calls`, `llm_raw_outputs`
+- `issues`, `severity_tags`, `actions_summary`
+- `final_review_json`, `errors`, `trace`
+
+### Minimal LangGraph Integration Plan
+
+1. **Create a new orchestration module**
+  - Add `arg/utils/arg_graph_agent.py` that defines:
+    - State schema
+    - Node functions
+    - Graph edges/conditionals
+    - Compiled graph app
+
+2. **Wrap existing utilities as tools**
+  - Reuse existing functions from:
+    - `ARG.py` for diff/function extraction
+    - `qtest.py` for qTest retrieval
+    - existing log parsing helpers
+  - Expose them as LangChain tools so planner/router nodes can invoke them consistently.
+
+3. **Replace single-pass prompt calls with node-specific prompts**
+  - Move each check type to its own prompt template:
+    - Code review prompt
+    - Test alignment prompt
+    - Log validation prompt
+    - Severity classification prompt
+
+4. **Update Celery task entrypoint**
+  - In `core/tasks.py`, replace direct `AI_ARG.ARG_tool(...)` execution path with:
+    - build initial graph state
+    - run compiled LangGraph
+    - persist `state["final_review_json"]`
+
+5. **Add observability**
+  - Capture per-node:
+    - latency
+    - token usage/cost
+    - retry count
+    - failure reason
+  - Persist trace metadata for debugging and quality audits.
+
+6. **Add fallback strategy**
+  - If agent graph fails or times out:
+    - fallback to current pipeline path (`AI_ARG.ARG_tool`) to preserve operational continuity.
+
+### LangChain/LangGraph Value in This Project
+
+- Better control over multi-step reasoning with explicit graph state transitions
+- Cleaner separation of responsibilities between analysis stages
+- Easier insertion of human-in-the-loop approvals and policy checks
+- Stronger debuggability vs monolithic prompt pipelines
+- Safer retries/resume semantics for long-running async review jobs
+
+### Example Pseudocode (Conceptual)
+
+```python
+from langgraph.graph import StateGraph, END
+
+class ReviewState(TypedDict):
+   review_id: int
+   workspace: str
+   changed_files: list[str]
+   qtest_steps: list[dict]
+   ut_logs: str
+   issues: list[dict]
+   final_review_json: dict
+   errors: list[str]
+
+graph = StateGraph(ReviewState)
+graph.add_node("collect_context", collect_context_node)
+graph.add_node("qtest_context", qtest_context_node)
+graph.add_node("log_context", log_context_node)
+graph.add_node("plan", plan_node)
+graph.add_node("code_review", code_review_node)
+graph.add_node("test_alignment", test_alignment_node)
+graph.add_node("log_validation", log_validation_node)
+graph.add_node("severity", severity_node)
+graph.add_node("synthesis", synthesis_node)
+
+graph.set_entry_point("collect_context")
+graph.add_edge("collect_context", "qtest_context")
+graph.add_edge("collect_context", "log_context")
+graph.add_edge("qtest_context", "plan")
+graph.add_edge("log_context", "plan")
+graph.add_edge("plan", "code_review")
+graph.add_edge("code_review", "test_alignment")
+graph.add_edge("test_alignment", "log_validation")
+graph.add_edge("log_validation", "severity")
+graph.add_edge("severity", "synthesis")
+graph.add_edge("synthesis", END)
+
+app = graph.compile()
+result = app.invoke(initial_state)
+```
+
+---
+
+## 5) Design Strengths and Observations
+
+- **Scalable execution model:** async queue architecture isolates heavy processing from user request latency.
+- **Context-rich AI evaluation:** combines code diff + test spec + logs, reducing single-source hallucination risk.
+- **Operational integration:** direct qTest and ReviewBoard hooks align outputs with existing engineering workflows.
+- **Composable AI tasks:** prompt-type separation supports maintainability and targeted evolution of review quality.
+
+Potential technical improvement areas (future):
+
+- stronger typed schemas for all AI stage inputs/outputs,
+- centralized retry/backoff and circuit-breakers for external dependencies,
+- explicit observability around prompt stage latency/cost/quality metrics.
+
+ 

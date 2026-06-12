@@ -73,7 +73,7 @@ var x = 5;
 
 // Equivalent to:
 var x;
-console.log(x); // undefined
+console.log(x); // 5
 x = 5;
 
 // Function hoisting

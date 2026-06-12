@@ -81,3 +81,25 @@ LiteLLM is a Python library that acts as a unified interface over multiple LLM p
 ### Key Point to Remember
 
 Mentioning LiteLLM shows you thought about **provider flexibility**, **cost control**, and **production reliability** — not just "call the AI API and hope it works." That signals senior-level thinking. Keep the explanation short and let the interviewer ask follow-ups.
+
+---
+
+## Measuring Article Quality — How to Answer
+
+### 30-Second Explanation (Say This in the Interview)
+
+> "In ArticleAgent, measuring quality requires a mix of **automated metrics** and **user signals**. First, I track **Instruction Adherence**—did the system hit the target word count, formatting, and tone? Second, to prevent hallucinations, I use an LLM-as-a-judge approach to measure **Faithfulness**, checking if the final text is strictly supported by the data gathered by the Research Agent. But the most important practical metric is **User Edit Distance**. Since users refine content in our real-time editor, the fewer edits they have to make before publishing, the higher the generation quality."
+
+---
+
+### Follow-up Questions & Answers
+
+**Q: What specific metrics or frameworks could you use to automate quality checks?**
+
+> For automated checks, we can use LLM-as-a-Judge frameworks like Ragas or LangChain Evaluators. Specifically, we look at **Faithfulness** (is the content grounded in the research?) and **Answer Relevance** (does it answer the user's prompt?). We can also use traditional NLP metrics like the **Flesch-Kincaid readability score** to ensure the text isn't too robotic, which validates our Humanization layer.
+
+---
+
+**Q: How do you know if the generated article is actually performing well for the user?**
+
+> The ultimate test is user behavior. I look at the **Acceptance Rate** or **Edit Distance** in the real-time editor. If a user generates an article and publishes it with minimal tweaks, that's a success. If they are constantly rewriting entire sections, it means the generation pipeline needs tuning. Post-publishing, SEO metrics like organic traffic, time on page, and bounce rate are the final indicators.

@@ -39,6 +39,19 @@ JavaScript runs on a **single thread**, meaning it can only execute one piece of
 - **Purpose**: Keeps track of what function is currently running
 - **Behavior**: Functions are pushed when called, popped when they return
 
+```mermaid
+sequenceDiagram
+    participant Main as Main Program
+    participant Stack as Call Stack
+    
+    Main->>Stack: Push first()
+    Stack->>Stack: Push second()
+    Stack->>Stack: Push third()
+    Stack-->>Stack: Pop third()
+    Stack-->>Stack: Pop second()
+    Stack-->>Main: Pop first()
+```
+
 ```javascript
 function first() {
     console.log('First function');
@@ -97,7 +110,21 @@ document.addEventListener('click'); // DOM API
 
 ### The Event Loop Algorithm:
 
+```mermaid
+flowchart TD
+    Start[Check if Call Stack is empty] --> IsEmpty{Is it empty?}
+    IsEmpty -- No --> Execute[Execute function in Call Stack]
+    Execute --> Start
+    IsEmpty -- Yes --> CheckMicro{Microtasks pending?}
+    CheckMicro -- Yes --> PopMicro[Move one Microtask to Call Stack]
+    PopMicro --> Execute
+    CheckMicro -- No --> CheckMacro{Tasks pending?}
+    CheckMacro -- Yes --> PopMacro[Move one Task to Call Stack]
+    PopMacro --> Execute
+    CheckMacro -- No --> Start
 ```
+
+```text
 1. Check if Call Stack is empty
 2. If Call Stack is empty:
    a. Check Microtask Queue
@@ -373,40 +400,30 @@ process.nextTick(() => console.log('nextTick'));
 
 ## Visual Representation
 
-```
-┌─────────────────────────────┐
-│         Call Stack          │ ← Currently executing code
-└─────────────────────────────┘
-                ↑
-                │ (when empty)
-                │
-        ┌───────────────┐
-        │   Event Loop  │ ← Coordinator
-        └───────────────┘
-                │
-                ▼
-    ┌─────────────────────────────┐
-    │     Microtask Queue         │ ← Higher Priority
-    │ • Promise.then/catch/finally│
-    │ • queueMicrotask           │
-    │ • MutationObserver         │
-    └─────────────────────────────┘
-                │
-                ▼ (only when microtask queue is empty)
-    ┌─────────────────────────────┐
-    │       Task Queue            │ ← Lower Priority
-    │ • setTimeout/setInterval   │
-    │ • DOM Events               │
-    │ • I/O Operations           │
-    └─────────────────────────────┘
-                ↑
-                │
-    ┌─────────────────────────────┐
-    │        Web APIs             │ ← Async Operations
-    │ • Timers                   │
-    │ • Network Requests         │
-    │ • DOM Event Listeners     │
-    └─────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Engine[JavaScript Engine]
+        CS[Call Stack<br>Currently executing code]
+    end
+
+    subgraph Browser[Browser / Web APIs]
+        API[DOM, Timer, Fetch, etc.]
+    end
+
+    subgraph Queues[Queues]
+        MQ[Microtask Queue<br>Higher Priority<br>Promises, queueMicrotask]
+        TQ[Task Queue<br>Lower Priority<br>setTimeout, DOM events]
+    end
+
+    CS -- Async operations --> API
+    API -- Callbacks --> TQ
+    API -- Promise resolutions --> MQ
+
+    EL{Event Loop<br>Coordinator}
+    EL -- 1. If Call Stack empty --> MQ
+    EL -- 2. If Microtask Queue empty --> TQ
+    MQ -- Push to --> CS
+    TQ -- Push to --> CS
 ```
 
 ---

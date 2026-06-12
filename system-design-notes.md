@@ -182,14 +182,11 @@ Creating copies of data across multiple systems.
 - Distributed hierarchical naming system
 
 ### DNS Hierarchy
-```
-Root Servers (.)
-    ↓
-Top-Level Domain (.com, .org)
-    ↓
-Authoritative Servers (google.com)
-    ↓
-Subdomains (www.google.com)
+```mermaid
+graph TD
+    A[Root Servers .] --> B[Top-Level Domain .com, .org]
+    B --> C[Authoritative Servers google.com]
+    C --> D[Subdomains www.google.com]
 ```
 
 ### DNS Record Types
@@ -313,6 +310,13 @@ Subdomains (www.google.com)
 - **Example**: Adding more web servers behind load balancer
 
 ### Reverse Proxy (Web Server)
+```mermaid
+graph LR
+    Client1[Client] --> RP[Reverse Proxy]
+    Client2[Client] --> RP
+    RP --> Web1[Backend Server 1]
+    RP --> Web2[Backend Server 2]
+```
 - **Purpose**: Sits between clients and backend servers
 - **Functions**:
   - SSL termination
@@ -332,6 +336,15 @@ Subdomains (www.google.com)
 ### Application Layer
 
 #### Microservices
+```mermaid
+graph TD
+    Client[Client App] --> API[API Gateway]
+    API --> Auth[Auth Service]
+    API --> User[User Service]
+    API --> Order[Order Service]
+    User --> UserDB[(User DB)]
+    Order --> OrderDB[(Order DB)]
+```
 - **Definition**: Architecture pattern with small, independent services
 - **Characteristics**:
   - Single responsibility
@@ -376,6 +389,14 @@ Subdomains (www.google.com)
 ### Replication Patterns
 
 #### Master-Slave Replication
+```mermaid
+graph TD
+    Master[(Master - Writes)] --> Slave1[(Slave 1 - Reads)]
+    Master --> Slave2[(Slave 2 - Reads)]
+    ClientW[Client Write] --> Master
+    ClientR[Client Read] --> Slave1
+    ClientR2[Client Read] --> Slave2
+```
 - **Setup**: One master (writes), multiple slaves (reads)
 - **Pros**: 
   - Read scaling
@@ -387,6 +408,12 @@ Subdomains (www.google.com)
 - **Example**: MySQL master-slave setup
 
 #### Master-Master Replication
+```mermaid
+graph LR
+    Master1[(Master 1)] <--> Master2[(Master 2)]
+    Client1[Client] --> Master1
+    Client2[Client] --> Master2
+```
 - **Setup**: Multiple masters accepting writes
 - **Pros**:
   - No single point of failure
@@ -533,7 +560,23 @@ Subdomains (www.google.com)
 ### Cache Update Patterns
 
 #### Cache-Aside (Lazy Loading)
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Cache
+    participant DB as Database
+    
+    App->>Cache: Read Data
+    alt Cache Miss
+        Cache-->>App: Null/Miss
+        App->>DB: Read Data
+        DB-->>App: Data
+        App->>Cache: Write Data
+    else Cache Hit
+        Cache-->>App: Data
+    end
 ```
+```python
 if (data not in cache):
     data = fetch_from_database()
     cache.set(key, data)
@@ -543,7 +586,18 @@ return data
 - **Cons**: Cache miss penalty, stale data possible
 
 #### Write-Through
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Cache
+    participant DB as Database
+    
+    App->>Cache: Write Data
+    Cache->>DB: Write Data (Sync)
+    DB-->>Cache: Acknowledge
+    Cache-->>App: Acknowledge
 ```
+```python
 cache.set(key, data)
 database.save(data)
 ```
@@ -582,6 +636,13 @@ if (cache_expiry_time - current_time < threshold):
 - Improve system resilience
 
 #### Message Queues
+```mermaid
+graph LR
+    P1[Producer 1] --> Q[(Message Queue)]
+    P2[Producer 2] --> Q
+    Q --> C1[Consumer 1]
+    Q --> C2[Consumer 2]
+```
 - **Purpose**: Asynchronous communication between services
 - **Pattern**: Producer → Queue → Consumer
 - **Examples**: RabbitMQ, Amazon SQS, Apache Kafka
@@ -711,6 +772,23 @@ if (cache_expiry_time - current_time < threshold):
 - **Security**: Must be signed/encrypted, short expiration
 
 **OAuth 2.0**
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant AuthServer as Authorization Server
+    participant Resource as Resource Server
+
+    User->>Client: Access Application
+    Client->>AuthServer: Request Authorization
+    AuthServer-->>User: Prompt Login & Consent
+    User->>AuthServer: Grant Consent
+    AuthServer-->>Client: Authorization Code
+    Client->>AuthServer: Exchange Code for Token
+    AuthServer-->>Client: Access Token
+    Client->>Resource: Request Data + Token
+    Resource-->>Client: Data
+```
 - **Purpose**: Authorization framework for third-party access
 - **Flow**: Authorization Code, Client Credentials, Resource Owner Password
 - **Use cases**: Social login, API access delegation

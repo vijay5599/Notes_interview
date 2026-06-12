@@ -2024,3 +2024,422 @@ const PostList = () => {
   return <PostGrid posts={posts} />;
 };
 ```
+---
+
+## React vs Next.js — Key Differences
+
+### What is the difference between React and Next.js?
+
+| Feature | React | Next.js |
+|---|---|---|
+| **Type** | UI Library | Full-stack Framework built on React |
+| **Rendering** | Client-Side only (CSR) | CSR, SSR, SSG, ISR — all supported |
+| **Routing** | No built-in router (need React Router) | Built-in file-based routing |
+| **SEO** | Poor (content loads after JS executes) | Excellent (SSR/SSG sends full HTML) |
+| **Data Fetching** | useEffect + fetch (after render) | getServerSideProps / getStaticProps / Server Components |
+| **API Routes** | Not supported | Built-in API routes (`/pages/api` or `/app/api`) |
+| **Bundle Size** | Smaller (just a library) | Larger (framework with many built-ins) |
+| **Configuration** | Needs manual setup (Webpack, Babel) | Zero config out of the box |
+| **Image Optimization** | Manual | Built-in `<Image>` component |
+| **Code Splitting** | Manual with React.lazy | Automatic per page |
+| **Learning Curve** | Lower | Higher (more concepts to learn) |
+| **Use Case** | SPAs, dashboards, internal tools | Public websites, blogs, e-commerce, full-stack apps |
+
+---
+
+### When to use React alone vs Next.js
+
+**Use React (with Vite/CRA) when:**
+- Building an internal dashboard or admin panel where SEO does not matter
+- The app requires heavy client-side interactivity (games, real-time tools)
+- You already have a separate backend (FastAPI, Django, Node) handling APIs
+- You want full control over your build setup
+
+**Use Next.js when:**
+- SEO is important (marketing pages, blogs, product pages)
+- You need server-side data fetching for performance
+- You want a full-stack solution with API routes in the same project
+- You want automatic image optimization, routing, and code splitting
+
+---
+
+### Core concept differences explained simply
+
+**Routing:**
+- React has no built-in router. You install `react-router-dom` and define routes manually.
+- Next.js routing is file-based. If you create `/app/about/page.tsx`, the route `/about` is automatically available.
+
+**Data Fetching:**
+- React fetches data inside components using `useEffect` — this means the page renders first (empty), then data loads.
+- Next.js can fetch data *before* the page renders on the server using Server Components or `getServerSideProps`, so the user sees content immediately.
+
+**SEO:**
+- React apps are hard to index by search engines because the HTML is empty until JavaScript runs.
+- Next.js sends fully rendered HTML from the server, which search engines can read perfectly.
+
+**API:**
+- In React, you build your backend separately.
+- In Next.js, you can create API endpoints inside the same project under `/app/api/` — no separate server needed for simple backends.
+
+---
+
+## Next.js Interview Questions & Answers
+
+### NQ1. What is Next.js and why would you use it over plain React?
+
+**Answer:**
+
+Next.js is a React framework built by Vercel that adds server-side capabilities on top of React. While React is just a UI library for building components, Next.js gives you a complete solution including routing, server-side rendering, static generation, API routes, and image optimization — all with zero configuration.
+
+The main reasons to use Next.js over plain React are:
+
+**SEO** — Next.js sends fully rendered HTML from the server, which search engines can index. Plain React sends an empty HTML shell that only fills in after JavaScript executes.
+
+**Performance** — Pages can be pre-rendered at build time (SSG) or on each request (SSR), so users see content faster without waiting for client-side data fetching.
+
+**Full-stack** — You can write API endpoints directly in Next.js inside the `/api` folder without setting up a separate Express or FastAPI server.
+
+**Developer experience** — File-based routing, automatic code splitting, built-in TypeScript support, and image optimization are all included.
+
+---
+
+### NQ2. Explain the different rendering strategies in Next.js
+
+**Answer:**
+
+Next.js supports four rendering strategies:
+
+**1. Client-Side Rendering (CSR)**
+The page renders in the browser. Same as plain React. Data is fetched inside `useEffect` after the component mounts. Used for dashboards or highly dynamic pages where SEO is not needed.
+
+**2. Server-Side Rendering (SSR)**
+The page is rendered on the server on every request. The server fetches data, generates full HTML, and sends it to the browser. Best for pages with frequently changing data like a user profile or live feed. In the App Router, any async Server Component does this automatically.
+
+**3. Static Site Generation (SSG)**
+Pages are pre-built at build time and served as static HTML. Fastest possible performance. Best for blogs, documentation, marketing pages — content that does not change per user. Uses `getStaticProps` in Pages Router or is the default for Server Components with no dynamic data.
+
+**4. Incremental Static Regeneration (ISR)**
+A hybrid of SSG and SSR. Pages are statically generated but can be regenerated in the background after a set time interval. Best for e-commerce product pages or news articles that change occasionally but not constantly. You set `revalidate: 60` to regenerate every 60 seconds.
+
+---
+
+### NQ3. What is the difference between the Pages Router and the App Router in Next.js?
+
+**Answer:**
+
+**Pages Router (older, still widely used):**
+- Files in `/pages` directory become routes automatically
+- Data fetching uses `getServerSideProps`, `getStaticProps`, and `getStaticPaths`
+- All components are client components by default
+- API routes live in `/pages/api`
+
+**App Router (Next.js 13+, current standard):**
+- Files in `/app` directory, uses `page.tsx` convention
+- All components are **Server Components by default** — they run on the server and have zero JavaScript bundle impact
+- Mark a component as a client component with `"use client"` at the top
+- Data fetching is done directly with `async/await` inside Server Components — no more `getServerSideProps`
+- Supports Layouts, Loading states, and Error boundaries as files
+- API routes live in `/app/api`
+
+**Key mental shift:** In the App Router, you only send JavaScript to the browser for components that truly need interactivity. Everything else stays on the server — better performance by default.
+
+---
+
+### NQ4. What are Server Components and Client Components?
+
+**Answer:**
+
+**Server Components:**
+- Run only on the server — never sent to the browser
+- Can directly access databases, file systems, and environment variables
+- Cannot use hooks like `useState`, `useEffect`, or browser APIs
+- Zero JavaScript added to the client bundle — great for performance
+- Default in the Next.js App Router
+
+```
+// This runs only on the server
+// No "use client" directive needed
+async function UserList() {
+  const users = await db.query('SELECT * FROM users'); // Direct DB access
+  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+}
+```
+
+**Client Components:**
+- Run in the browser (and optionally pre-rendered on the server for the initial HTML)
+- Can use hooks, event handlers, browser APIs
+- Add JavaScript to the client bundle
+- Marked with `"use client"` at the top of the file
+
+```
+"use client"
+
+import { useState } from "react";
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+}
+```
+
+**The rule:** Push as much as possible into Server Components. Only convert to Client Components when you need interactivity, hooks, or browser APIs.
+
+---
+
+### NQ5. How does file-based routing work in Next.js App Router?
+
+**Answer:**
+
+In Next.js App Router, the folder structure under `/app` directly defines your URL routes.
+
+- `/app/page.tsx` → renders at `/`
+- `/app/about/page.tsx` → renders at `/about`
+- `/app/blog/[slug]/page.tsx` → renders at `/blog/:slug` (dynamic route)
+- `/app/dashboard/layout.tsx` → shared layout wrapping all dashboard pages
+- `/app/dashboard/loading.tsx` → automatically shown while the page loads
+- `/app/dashboard/error.tsx` → shown if an error occurs in that route
+
+**Special files:**
+- `page.tsx` — the actual page UI
+- `layout.tsx` — persistent UI wrapping child routes (navigation, sidebar)
+- `loading.tsx` — automatic Suspense boundary loading state
+- `error.tsx` — automatic error boundary
+- `not-found.tsx` — shown when a resource is not found
+- `route.ts` — API endpoint for that path
+
+**Dynamic routes:**
+- `[id]` — single dynamic segment
+- `[...slug]` — catch-all route (matches multiple segments)
+- `[[...slug]]` — optional catch-all route
+
+---
+
+### NQ6. How do you fetch data in Next.js App Router?
+
+**Answer:**
+
+In the App Router, data fetching is done directly inside async Server Components using `fetch` or any database/ORM client. No special functions like `getServerSideProps` are needed.
+
+**Server Component data fetch (SSR by default):**
+```
+async function ProductPage({ params }) {
+  // This runs on the server on every request
+  const product = await fetch(`https://api.example.com/products/${params.id}`);
+  const data = await product.json();
+
+  return <div>{data.name}</div>;
+}
+```
+
+**Static fetch (SSG — cached indefinitely):**
+```
+async function BlogPage() {
+  // Cached at build time — behaves like SSG
+  const res = await fetch('https://api.example.com/posts', {
+    cache: 'force-cache' // Default behavior
+  });
+  const posts = await res.json();
+  return <PostList posts={posts} />;
+}
+```
+
+**Revalidating fetch (ISR):**
+```
+async function NewsPage() {
+  // Re-fetches in background every 60 seconds
+  const res = await fetch('https://api.example.com/news', {
+    next: { revalidate: 60 }
+  });
+  const news = await res.json();
+  return <NewsFeed news={news} />;
+}
+```
+
+**Client-side fetch (for highly dynamic or user-specific data):**
+```
+"use client"
+import { useEffect, useState } from "react";
+
+function UserDashboard() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/user-data').then(r => r.json()).then(setData);
+  }, []);
+
+  return <div>{data?.name}</div>;
+}
+```
+
+---
+
+### NQ7. What is the `layout.tsx` file and how does it work?
+
+**Answer:**
+
+`layout.tsx` defines a shared UI wrapper that persists across multiple pages without re-rendering when the user navigates between routes within that section.
+
+The root layout at `/app/layout.tsx` is required and wraps the entire application. It is where you put your `<html>` and `<body>` tags, global fonts, and providers.
+
+```
+// app/layout.tsx - Root layout
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <Navbar />
+        {children}
+        <Footer />
+      </body>
+    </html>
+  );
+}
+```
+
+You can also create nested layouts for specific sections:
+
+```
+// app/dashboard/layout.tsx - Dashboard layout
+export default function DashboardLayout({ children }) {
+  return (
+    <div className="dashboard">
+      <Sidebar />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+Now all pages under `/dashboard/*` automatically get the sidebar without needing to include it in every page. The layout does not re-mount when the user navigates between dashboard pages — only the `{children}` part changes. This is more efficient than previous approaches.
+
+---
+
+### NQ8. What is ISR (Incremental Static Regeneration) and when would you use it?
+
+**Answer:**
+
+ISR lets you update static pages in the background after they have been built, without needing to rebuild the entire site.
+
+You set a `revalidate` time (in seconds). After that time passes and a request comes in, Next.js serves the stale cached page immediately (fast response) and triggers a background regeneration. The next request gets the fresh page.
+
+**When to use ISR:**
+- Product pages on an e-commerce site — prices and stock change occasionally but not every second
+- Blog articles — content does not change per user but updates periodically
+- News articles — fresh enough with 60-second revalidation without the overhead of SSR on every request
+
+**When NOT to use ISR:**
+- Real-time data (stock prices, live scores) — use SSR or client-side fetching
+- Authenticated user-specific data — use CSR or SSR
+
+ISR gives you the best of both worlds — static performance with the ability to stay up to date.
+
+---
+
+### NQ9. How does Next.js handle image optimization?
+
+**Answer:**
+
+Next.js provides a built-in `<Image>` component that automatically handles:
+
+- **Resizing** — serves the correct image size for the device
+- **Format conversion** — converts images to WebP or AVIF when supported
+- **Lazy loading** — images below the fold are not downloaded until needed
+- **Preventing layout shift** — requires width and height to reserve space
+
+```
+import Image from "next/image";
+
+export default function Profile() {
+  return (
+    <Image
+      src="/profile.jpg"
+      alt="Profile photo"
+      width={200}
+      height={200}
+      priority  // Load this immediately (above the fold)
+    />
+  );
+}
+```
+
+Using the standard HTML `<img>` tag skips all these optimizations. For external images, you configure allowed domains in `next.config.js`.
+
+---
+
+### NQ10. How do you handle authentication in Next.js?
+
+**Answer:**
+
+There are two main approaches depending on whether you are using middleware or component-level checks.
+
+**Middleware-based protection (recommended):**
+Middleware runs before the page is rendered — if the user is not authenticated, redirect them before any content loads.
+
+```
+// middleware.ts
+import { NextResponse } from "next/server";
+
+export function middleware(request) {
+  const token = request.cookies.get("token");
+
+  if (!token && request.nextUrl.pathname.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/dashboard/:path*"],
+};
+```
+
+**NextAuth.js (most popular library):**
+NextAuth handles OAuth providers (Google, GitHub), JWT sessions, and database sessions with minimal setup.
+
+**Server Component check:**
+In Server Components you can read cookies directly and redirect without exposing any content to unauthorized users.
+
+The key principle is: protect routes at the middleware level so unauthorized users never receive any page HTML at all.
+
+---
+
+### NQ11. What is the difference between `redirect()` and `useRouter().push()` in Next.js?
+
+**Answer:**
+
+| | `redirect()` | `useRouter().push()` |
+|---|---|---|
+| **Where it runs** | Server-side (Server Components, API routes, middleware) | Client-side only (Client Components) |
+| **When to use** | Redirect before page renders — auth guards, post-form submission | Navigate after user interaction — button click, form submit |
+| **Requires "use client"** | No | Yes |
+
+```
+// Server-side redirect — user never sees the page
+import { redirect } from "next/navigation";
+
+async function DashboardPage() {
+  const user = await getUser();
+  if (!user) redirect("/login"); // Sends 307 redirect from server
+  return <Dashboard user={user} />;
+}
+```
+
+```
+// Client-side navigation — happens in browser
+"use client"
+import { useRouter } from "next/navigation";
+
+function LoginForm() {
+  const router = useRouter();
+
+  const handleLogin = async () => {
+    await login();
+    router.push("/dashboard"); // Client-side navigation after login
+  };
+
+  return <button onClick={handleLogin}>Login</button>;
+}
+```
+
+**Rule of thumb:** Use `redirect()` for security-critical redirects (auth checks). Use `router.push()` for UX navigation after user actions.
