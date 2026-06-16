@@ -160,8 +160,21 @@ I lay out the Core Architecture, which typically consists of:
 * Extension APIs (Plugins)
 
 #### Step 3. Define the Request Lifecycle
-I map exactly how data flows through the system:
-`Request → Middleware → Router → Validation → Business Logic → Response`
+I map exactly how data flows through the system. A visual representation of the framework's code workflow:
+
+```mermaid
+graph TD
+    Client[Client Request] --> ASGI[ASGI Server / Uvicorn]
+    ASGI --> MW_In[Middleware Pipeline <br/> Logging, Auth, CORS]
+    MW_In --> Router[Routing Engine <br/> Match URL to Endpoint]
+    Router --> Val[Validation Layer <br/> Pydantic Schemas]
+    Val -->|Data Valid| BL[Business Logic <br/> Developer's Controller]
+    Val -->|Data Invalid| Err[Error Handler <br/> 422 Unprocessable Entity]
+    BL --> MW_Out[Middleware Pipeline <br/> Add Process-Time Header]
+    Err --> MW_Out
+    MW_Out --> Resp[JSON Response]
+    Resp --> Client
+```
 
 #### Step 4. Extension Design
 A framework must be extensible without requiring users to modify the source code. I support this via:
