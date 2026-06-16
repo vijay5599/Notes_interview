@@ -40,6 +40,220 @@ internal_framework/
 
 ---
 
+## How to Build, Install, and Use the Framework
+
+> You do NOT need to publish to PyPI to use it. You can install it locally first, test it, then publish.
+
+### Step 1 — Write `pyproject.toml`
+
+This file is the heart of your package. Create it at the root of your project:
+
+```toml
+# pyproject.toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "internal-framework"
+version = "1.0.0"
+description = "Internal reusable API framework"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.100",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+```
+
+---
+
+### Step 2 — Install It Locally (Editable Mode)
+
+During development, you don't need to build a `.whl` file every time you make a change. Use **editable install** (`-e`). This installs the package but points directly to your source folder — so any code changes you make are reflected immediately.
+
+```bash
+# Navigate to the root of your framework project
+cd internal_framework/
+
+# Install in editable mode — like a "live link" to your source code
+pip install -e .
+```
+
+**What happens:**
+- Python registers `internal-framework` as an installed package.
+- But instead of copying files, it creates a pointer to your `src/` folder.
+- You can now `import internal_framework` from anywhere in your Python environment.
+
+```python
+# This now works in any project in the same environment!
+from internal_framework.middleware.auth import AuthMiddleware
+from internal_framework.config.settings import Settings
+```
+
+---
+
+### Step 3 — Use It in Another Project (Local Dev)
+
+In the consuming service (e.g., `billing-api`), just import it directly:
+
+```python
+# billing-api/main.py
+from fastapi import FastAPI
+from internal_framework.middleware.logging import LoggingMiddleware
+from internal_framework.config.settings import Settings
+from internal_framework.logger.logger import get_logger
+
+config = Settings()
+logger = get_logger(__name__)
+
+app = FastAPI()
+app.add_middleware(LoggingMiddleware)
+
+@app.get("/health")
+def health():
+    logger.info("Health check called")
+    return {"status": "ok"}
+```
+
+---
+
+### Step 4 — Build a Distributable Package (When Ready to Share)
+
+Once development is done and you want to share it with other teams, build a `.whl` (wheel) file:
+
+```bash
+# Install the build tool first
+pip install build
+
+# Build the package — creates dist/ folder with .whl and .tar.gz
+python -m build
+```
+
+This creates:
+```text
+dist/
+├── internal_framework-1.0.0-py3-none-any.whl   ← The installable binary
+└── internal_framework-1.0.0.tar.gz              ← The source archive
+```
+
+---
+
+### Step 5A — Share via File (Quick & Simple)
+
+Teams can install directly from the `.whl` file:
+
+```bash
+pip install dist/internal_framework-1.0.0-py3-none-any.whl
+```
+
+---
+
+### Step 5B — Publish to a Private Registry (Production Approach)
+
+For teams distributed across services, publish to a private package index:
+
+```bash
+# Install twine (the upload tool)
+pip install twine
+
+# Upload to your private registry (Nexus, Artifactory, or AWS CodeArtifact)
+twine upload --repository-url https://my-private-registry/simple/ dist/*
+```
+
+Teams then install it like any other package:
+
+```bash
+pip install internal-framework --index-url https://my-private-registry/simple/
+```
+
+Or pin the version in their `requirements.txt`:
+
+```text
+# billing-api/requirements.txt
+internal-framework==1.0.0
+fastapi==0.110.0
+uvicorn==0.29.0
+```
+
+---
+
+### Full Workflow Summary
+
+```mermaid
+graph LR
+    A["Write Code\n(src/ folder)"] --> B["pyproject.toml\n(declare metadata)"]
+    B --> C["pip install -e .\n(local dev editable install)"]
+    C --> D["Test & develop\n(import works immediately)"]
+    D --> E["python -m build\n(create .whl)"]
+    E --> F{"Share how?"}
+    F --> G["Direct .whl file\n(small teams)"]
+    F --> H["Private Registry\n(Nexus/Artifactory)"]
+    H --> I["pip install internal-framework\n(any service, any machine)"]
+```
+
+---
+
+## ⚡ Cross Questions — Brutal Interviewer Follow-ups
+
+These are the follow-up questions interviewers ask immediately after your initial answer. They are designed to catch candidates who memorized answers but never actually built anything.
+
+---
+
+### After you say: "I built a reusable Python framework..."
+
+| Cross Question | What to Say |
+|---|---|
+| **Why a framework and not just a shared utility file?** | "A single file doesn't enforce structure. A package with proper versioning, tests, and a `pyproject.toml` allows teams to pin a specific version, see a changelog, and not be surprised by breaking changes." |
+| **Who were the consumers of this framework?** | "Other backend microservice teams. We had 3 teams onboarded, each running 2-4 FastAPI services. The framework was their starting template." |
+| **Did you get pushback? How did you handle it?** | "Yes. The main resistance was 'another thing to maintain.' I addressed it by starting with the logging module only, which had zero risk and immediate value. Once teams saw the benefit, buy-in grew." |
+| **What would you do differently if you rebuilt it today?** | "I'd invest more in automated API contract tests from day one, and establish the deprecation policy before the first release — not after the first breaking change." |
+
+---
+
+### After you explain the Folder Structure
+
+| Cross Question | What to Say |
+|---|---|
+| **Why `src/` layout instead of flat layout?** | "The `src/` layout prevents accidentally importing the local uninstalled package during tests. Without it, `import internal_framework` during tests might load the raw source folder instead of the installed wheel, masking packaging bugs." |
+| **Why is `pyproject.toml` there instead of `setup.py`?** | "`setup.py` is the legacy approach. `pyproject.toml` is the modern PEP 517/518 standard. It supports build backends like `hatchling` or `flit` and works natively with `pip` and `poetry`." |
+| **What is in `__init__.py`?** | "It controls the public API of the package. I explicitly re-exported only what external teams should use: `from internal_framework import setup_app, CoreMiddleware, Settings`. Internals stay hidden." |
+| **Why separate `logger/` and `middleware/`? Couldn't logging just be in middleware?** | "Separation of concerns. The `logger/` module is a standalone utility that any part of the system (including non-middleware code like background tasks) can import. Middleware is specifically about HTTP request/response interception." |
+| **How do you handle circular imports across these modules?** | "By keeping the dependency direction strict: `utils` has no internal imports. `config` imports only `utils`. `logger` imports `config`. `middleware` imports `logger` and `config`. Never the reverse." |
+
+---
+
+### After you explain Middleware
+
+| Cross Question | What to Say |
+|---|---|
+| **What happens if your middleware crashes? Does it take down the whole app?** | "No. The middleware wraps the `call_next()` in a `try/except`. If the middleware itself fails, it catches the exception, logs it, and returns a `500` response rather than propagating the crash." |
+| **How did you test the middleware in isolation?** | "Using `httpx.AsyncClient` with `app=my_app` to make real in-process HTTP requests without a live server. I also directly unit-tested the `dispatch()` method by mocking the `request` and `call_next` objects." |
+| **Why not use a decorator on every route instead of middleware?** | "Decorators must be manually added to every endpoint. One developer forgets it once and you have an untracked request. Middleware is registered once and is guaranteed to intercept 100% of traffic." |
+| **How do you allow teams to opt-out of specific middleware?** | "I designed the middleware as optional components registered during `setup_app()`. Teams pass in a list of what they want: `setup_app(middlewares=[AuthMiddleware, LoggingMiddleware])`. Omit it from the list to skip it." |
+
+---
+
+### After you explain Logging
+
+| Cross Question | What to Say |
+|---|---|
+| **How do correlation IDs flow across multiple microservices?** | "The first service generates a UUID and sets it as the `X-Request-ID` header. Every subsequent downstream service reads that header and injects it into its own logs. A centralized log aggregator (Datadog) can then filter by that single ID to see the entire request chain." |
+| **How do you avoid logging sensitive data like passwords?** | "The logger module has a `SENSITIVE_KEYS` blocklist. Before serializing any request body or headers to JSON logs, it iterates through and replaces values of keys like `password`, `token`, `credit_card` with `***REDACTED***`." |
+| **What log level do you use in production?** | "`WARNING` and above in production. `DEBUG` level logs every request body and is too noisy and expensive in prod. It is enabled per-service via an environment variable for temporary debugging sessions only." |
+
+---
+
+### After you explain Configuration
+
+| Cross Question | What to Say |
+|---|---|
+| **What happens if a required environment variable is missing when the app boots?** | "With `pydantic-settings`, the app immediately raises a `ValidationError` and crashes at startup — before it ever starts accepting traffic. This is the correct behaviour. It's far better to crash on boot than to fail silently mid-request when a variable is first accessed." |
+| **How do you manage secrets in production — are they in the `.env` file?** | "Never. `.env` files are for local development only and are in `.gitignore`. In production, secrets are injected by the deployment platform — Kubernetes Secrets, AWS Secrets Manager, or HashiCorp Vault — as OS environment variables." |
+| **Can two services use different configs from the same framework?** | "Yes. Each service creates its own `Settings` subclass, inheriting all the base framework config fields and adding its own service-specific ones. The framework provides a `BaseSettings` class; services extend it." |
+
+---
+
 ## Component Explanations
 
 ### 1. Middleware
@@ -390,6 +604,447 @@ driver = webdriver.Chrome(options=options)
 
 ### Q. How do you handle Shadow DOM in Selenium?
 **Answer:** Standard CSS/XPath locators cannot pierce a Shadow DOM. In newer Selenium versions, you have to find the shadow host element, then use `.shadow_root` to enter it, and then search for your elements within that root. Alternatively, you can use `execute_script` to pierce the shadow root via JavaScript.
+
+---
+
+## Robot Framework Specific Questions
+
+### Q. What is Robot Framework and what are its key features?
+**Answer:** Robot Framework is an open-source, keyword-driven automation framework.
+*   **Key Features:** It uses a tabular, plain-text syntax that is easy for non-programmers to read. It separates test data from test logic. It is highly extensible via custom Python libraries and has a massive ecosystem of built-in libraries (like `SeleniumLibrary` and `RequestsLibrary`). It generates detailed HTML reports out of the box.
+
+### Q. What are the different file sections/tables in a Robot Framework test suite?
+**Answer:** A typical `.robot` file contains four main tables:
+1.  `*** Settings ***`: Imports libraries, resource files, and defines Suite Setup/Teardown.
+2.  `*** Variables ***`: Defines global or suite-level variables.
+3.  `*** Test Cases ***`: The actual test scenarios written using keywords.
+4.  `*** Keywords ***`: Custom user-defined keywords (higher-level abstractions composed of other keywords).
+
+### Q. How do you create custom keywords in Robot Framework using Python?
+**Answer:** You write a Python class or module with methods, and then import it as a Library.
+```python
+# MyCustomLibrary.py
+from robot.api.deco import keyword
+
+class MyCustomLibrary:
+    @keyword("Calculate Complex Discount")
+    def calculate_discount(self, price, customer_type):
+        if customer_type == 'VIP':
+            return float(price) * 0.8
+        return float(price)
+```
+In the `.robot` file, you import it:
+```robot
+*** Settings ***
+Library    MyCustomLibrary.py
+
+*** Test Cases ***
+Test VIP Discount
+    ${discounted_price}=    Calculate Complex Discount    100    VIP
+    Should Be Equal As Numbers    ${discounted_price}    80.0
+```
+
+### Q. What are the differences between `${var}`, `@{var}`, and `&{var}`?
+**Answer:** 
+*   `${var}`: Scalar variable (strings, numbers, objects).
+*   `@{var}`: List variable (arrays). Elements accessed via `${var}[0]`.
+*   `&{var}`: Dictionary variable (key-value pairs). Elements accessed via `${var}[key]`.
+
+### Q. How do you pass arguments from the command line when running Robot tests?
+**Answer:** You use the `-v` (or `--variable`) flag. This is crucial for injecting environment variables like URLs in a CI/CD pipeline.
+*Example:* `robot -v BROWSER:chrome -v ENV:staging tests/`
+
+### Q. What is the difference between `Suite Setup` and `Test Setup`?
+**Answer:** 
+*   `Suite Setup` runs exactly **once** before any tests in the file execute (e.g., Opening a database connection or launching the browser).
+*   `Test Setup` runs before **every single test case** in the file (e.g., navigating back to the home page and clearing cookies so tests are isolated).
+
+---
+
+## Robot Framework — Advanced Interview Questions
+
+### Q. What is a Resource File in Robot Framework?
+**Answer:** A Resource File (`.resource` or `.robot`) is a shared file that contains reusable keywords, variables, and library imports. It is like a shared "utility module" for Robot Framework. Any test suite can import it using `Resource    common/my_keywords.resource`, avoiding duplication across test files.
+
+```
+*** Settings ***
+Resource    ../resources/common_keywords.resource
+
+*** Test Cases ***
+Login And Check Dashboard
+    Open Application
+    Login As Admin
+    Verify Dashboard Visible
+```
+
+---
+
+### Q. What are Test Tags and how do you use them?
+**Answer:** Tags are labels applied to test cases to control which tests run in a specific pipeline run. This is critical for CI/CD.
+
+```robot
+*** Test Cases ***
+Test Login Feature
+    [Tags]    smoke    regression    login
+    Open Browser    ${URL}    Chrome
+    ...
+
+Test Checkout Feature
+    [Tags]    regression    payments
+    ...
+```
+
+Run only smoke tests:
+```bash
+robot --include smoke tests/
+```
+Exclude slow tests:
+```bash
+robot --exclude payments tests/
+```
+
+---
+
+### Q. How do you implement Data-Driven Testing in Robot Framework?
+**Answer:** Using the `*** Test Cases ***` template syntax. You define a single keyword template and provide multiple rows of data — Robot Framework runs the test independently for each row.
+
+```robot
+*** Settings ***
+Test Template    Verify Login With Credentials
+
+*** Test Cases ***    USERNAME       PASSWORD     EXPECTED
+Valid User Login      admin          secret123    Welcome
+Invalid Password      admin          wrongpass    Error
+Empty Username        ${EMPTY}       secret123    Error
+
+*** Keywords ***
+Verify Login With Credentials
+    [Arguments]    ${username}    ${password}    ${expected_msg}
+    Input Text     id=username    ${username}
+    Input Text     id=password    ${password}
+    Click Button   id=login-btn
+    Page Should Contain    ${expected_msg}
+```
+
+---
+
+### Q. How do you use FOR Loops and IF conditions in Robot Framework?
+**Answer:**
+
+**FOR Loop:**
+```robot
+*** Test Cases ***
+Check All Products
+    @{products}=    Create List    Apple    Banana    Mango
+    FOR    ${product}    IN    @{products}
+        Log    Checking product: ${product}
+        Product Should Be In Stock    ${product}
+    END
+```
+
+**IF Condition:**
+```robot
+*** Keywords ***
+Apply Discount If VIP
+    [Arguments]    ${customer_type}    ${price}
+    IF    '${customer_type}' == 'VIP'
+        ${final_price}=    Evaluate    ${price} * 0.8
+    ELSE
+        ${final_price}=    Set Variable    ${price}
+    END
+    RETURN    ${final_price}
+```
+
+---
+
+### Q. How do you handle errors and exceptions in Robot Framework?
+**Answer:**
+*   **`Run Keyword And Ignore Error`**: Runs a keyword and ignores if it fails. Returns status `PASS` or `FAIL` and the error message.
+*   **`Run Keyword And Expect Error`**: Asserts that a keyword **must** fail with a specific error message.
+*   **`Wait Until Keyword Succeeds`**: Retries a failing keyword repeatedly for a set duration — ideal for waiting on slow elements.
+
+```robot
+*** Test Cases ***
+Test Error Handling
+    ${status}    ${msg}=    Run Keyword And Ignore Error    Element Should Be Visible    id=popup
+    IF    '${status}' == 'PASS'
+        Click Button    id=close-popup
+    END
+
+    # Retry clicking a button for up to 10 seconds, retrying every 2 seconds
+    Wait Until Keyword Succeeds    10s    2s    Click Element    id=submit-btn
+```
+
+---
+
+### Q. What is a Robot Framework Listener?
+**Answer:** A Listener is a Python class that hooks into the Robot Framework execution lifecycle — similar to Pytest Hooks. You can use it to:
+*   Take a screenshot automatically when any test fails.
+*   Send a Slack/Teams notification on completion.
+*   Update a test management tool (Jira, Xray, TestRail) in real-time.
+
+```python
+# listeners/screenshot_on_fail.py
+class ScreenshotOnFail:
+    ROBOT_LISTENER_API_VERSION = 2
+
+    def end_test(self, name, attrs):
+        if attrs['status'] == 'FAIL':
+            from SeleniumLibrary import SeleniumLibrary
+            # Take screenshot on failure
+            driver = BuiltIn().get_library_instance('SeleniumLibrary').driver
+            driver.save_screenshot(f"screenshots/{name}.png")
+```
+Run with: `robot --listener listeners/screenshot_on_fail.py tests/`
+
+---
+
+### Q. How do you integrate Robot Framework with Selenium (SeleniumLibrary)?
+**Answer:** Import `SeleniumLibrary` and use its built-in keywords. The key keywords to know are:
+
+| Action | Keyword |
+|---|---|
+| Open browser | `Open Browser    ${URL}    chrome` |
+| Click an element | `Click Element    id=submit-btn` |
+| Type text | `Input Text    id=username    admin` |
+| Check text on page | `Page Should Contain    Welcome` |
+| Wait for element | `Wait Until Element Is Visible    id=loader    timeout=10s` |
+| Close browser | `Close Browser` |
+
+---
+
+### Q. How do you manage dynamic locators in Robot Framework?
+**Answer:** By using variable substitution inside locators. This avoids having to write a separate keyword for every item in a dynamic list.
+
+```robot
+*** Variables ***
+${PRODUCT_ROW}    xpath://table//tr[td[text()='{}']]/td[2]
+
+*** Keywords ***
+Get Product Price
+    [Arguments]    ${product_name}
+    ${locator}=    Format String    ${PRODUCT_ROW}    ${product_name}
+    ${price}=    Get Text    ${locator}
+    RETURN    ${price}
+
+*** Test Cases ***
+Verify Apple Price
+    ${price}=    Get Product Price    Apple
+    Should Be Equal    ${price}    $1.99
+```
+
+---
+
+### Q. How do you run Robot Framework tests in CI/CD?
+**Answer:** The standard CI/CD command is:
+```bash
+robot \
+  --variable ENV:staging \
+  --variable BROWSER:headlesschrome \
+  --include regression \
+  --outputdir results/ \
+  --log log.html \
+  --report report.html \
+  tests/
+```
+The generated `report.html` is uploaded as a CI pipeline artifact so teams can review test results without accessing the server.
+
+---
+
+### Q. What is the difference between `Library` and `Resource` in Robot Framework?
+**Answer:**
+*   **`Library`**: Imports a Python-coded library (`.py` file or an installed package like `SeleniumLibrary`). Used to access code that performs actual actions (opening browsers, making API calls).
+*   **`Resource`**: Imports another Robot Framework file (`.resource`). Used to share keywords and variables written in Robot Framework syntax across multiple test suites.
+
+---
+
+## Framework Development — Other Common Interview Questions
+
+### Q. How do you ensure backward compatibility when updating a framework?
+**Answer:** Backward compatibility is the #1 responsibility of a framework owner. My strategy:
+1. **Deprecation Warnings First**: Never remove a feature immediately. Mark it deprecated with `warnings.warn()` for at least one major version cycle, printing a helpful message telling users what to use instead.
+2. **Semantic Versioning**: Breaking changes only happen in MAJOR version bumps (e.g., `v1.x → v2.0`). Minor and patch releases must never break existing code.
+3. **Regression Test Suite**: Every release runs the full regression suite against the API contract before publishing to PyPI.
+4. **Migration Guides**: Publish a `CHANGELOG.md` and a migration guide for any MAJOR version bump.
+
+```python
+import warnings
+
+def old_function():
+    warnings.warn(
+        "old_function() is deprecated and will be removed in v3.0. "
+        "Use new_function() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return new_function()
+```
+
+---
+
+### Q. How do you package and distribute a Python framework internally?
+**Answer:** I use a private package registry. The process is:
+1. Define the package metadata in `pyproject.toml` (name, version, dependencies, entry points).
+2. Build the distribution: `python -m build` → creates `.whl` and `.tar.gz` files.
+3. Push to a private registry: internal Nexus, Artifactory, or AWS CodeArtifact.
+4. Teams install it: `pip install internal-framework --index-url https://my-private-registry/simple/`.
+
+---
+
+### Q. How do you handle dependency conflicts between the framework and user projects?
+**Answer:** I declare **minimum** version requirements in `pyproject.toml`, not pinned exact versions. For example:
+```toml
+[project]
+dependencies = [
+    "pydantic>=2.0,<3.0",  # Pinning major version avoids breaking changes
+    "httpx>=0.24",          # Minimum version needed for a specific feature
+]
+```
+Using broad version ranges allows the framework to coexist with other libraries that the user's app depends on. I also regularly run dependency audits using `pip-audit` to check for security vulnerabilities.
+
+---
+
+### Q. How do you design a plugin or extension system?
+**Answer:** I follow the **Open/Closed principle** — the framework core is closed for modification but open for extension. The pattern is:
+1. Define an **abstract base class (interface)** that plugins must implement.
+2. The framework has a **plugin registry** (a dictionary).
+3. Users register their plugin instance with the framework.
+4. The framework calls plugin lifecycle hooks at the right moments.
+
+```python
+from abc import ABC, abstractmethod
+
+class BasePlugin(ABC):
+    @abstractmethod
+    def on_request(self, request): ...
+
+    @abstractmethod
+    def on_response(self, response): ...
+
+class Framework:
+    def __init__(self):
+        self._plugins: list[BasePlugin] = []
+
+    def register_plugin(self, plugin: BasePlugin):
+        self._plugins.append(plugin)
+
+    def process_request(self, request):
+        for plugin in self._plugins:
+            plugin.on_request(request)  # Framework calls your code
+```
+
+---
+
+### Q. How did you handle configuration across different environments (dev, staging, prod)?
+**Answer:** I used a layered configuration approach with `pydantic-settings`:
+- **Layer 1 (Defaults)**: Safe default values hardcoded in the Settings class.
+- **Layer 2 (`.env` file)**: Overrides defaults for local development.
+- **Layer 3 (OS Environment Variables)**: CI/CD pipeline injects prod secrets. This layer always wins.
+
+This means the same codebase, zero changes, runs correctly in all environments. The framework validates all settings at startup and raises a `ValidationError` immediately if a required variable is missing.
+
+---
+
+### Q. How do you write tests for the framework itself?
+**Answer:** Testing a framework is different from testing a business application — you are testing the framework's contract:
+1. **Unit Tests**: Test individual utilities like the config parser or the routing regex logic in isolation.
+2. **Integration Tests**: Spin up a real test server using `httpx.AsyncClient` and make real HTTP requests against a minimal test app built on the framework.
+3. **Contract Tests**: Assert that the public API (function signatures, response schemas) does not change between versions.
+4. **Compatibility Matrix**: Use `tox` to run the test suite against multiple Python versions (3.9, 3.10, 3.11, 3.12) and multiple OS environments in CI.
+
+```python
+# Example integration test using httpx + pytest
+import pytest
+from httpx import AsyncClient
+from my_framework import create_app
+
+@pytest.mark.asyncio
+async def test_health_endpoint():
+    app = create_app()
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+```
+
+---
+
+### Q. How do you handle security concerns in a shared framework?
+**Answer:**
+- **Secrets Management**: Never allow secrets to be passed as constructor arguments. Force them through environment variables only.
+- **Input Sanitization**: The validation layer must sanitize and reject malformed inputs (SQL injection, XSS payloads) before they reach business logic.
+- **Dependency Auditing**: Regularly run `pip-audit` or use GitHub Dependabot to catch vulnerable transitive dependencies.
+- **Rate Limiting Middleware**: Provide an optional rate-limiting middleware so teams don't need to build one themselves.
+- **HTTPS Enforcement**: Middleware that redirects HTTP → HTTPS in production.
+
+---
+
+### Q. How do you handle async vs sync in a shared framework?
+**Answer:** A modern framework must support both. The pattern is to offer both sync and async versions of core operations, or to use `asyncio.run()` as a bridge. For example, SQLAlchemy offers both `Session` (sync) and `AsyncSession` (async).
+
+The key rule: **never block the async event loop with sync I/O**. If a user calls a slow database function synchronously inside an async endpoint, it will freeze the entire server. I document this clearly and provide async-native implementations for all I/O operations (HTTP clients, database drivers, cache clients).
+
+---
+
+### Q. What is Dependency Injection and how did you implement it?
+**Answer:** Dependency Injection (DI) means that a function does not create the objects it needs — they are *injected* (passed in) by an external system. This makes code testable and decoupled.
+
+FastAPI does this natively with `Depends()`. For an internal framework, I implemented a lightweight DI container:
+
+```python
+# The framework provides a container
+container = {}
+
+def provide(name, factory):
+    """Register a factory function for a dependency."""
+    container[name] = factory
+
+def inject(name):
+    """Retrieve and instantiate a registered dependency."""
+    return container[name]()
+
+# Application code registers dependencies
+provide("db", lambda: DatabaseConnection(url=config.DATABASE_URL))
+
+# Framework injects them into route handlers automatically
+def get_user_handler(request):
+    db = inject("db")   # Framework calls this; dev doesn't manually create DB connections
+    return db.query(User).all()
+```
+
+---
+
+### Q. What design patterns did you use when building the framework?
+**Answer:**
+
+| Pattern | Where Used |
+|---|---|
+| **Template Method** | Base middleware class defines `dispatch()` lifecycle; subclasses fill in the logic |
+| **Chain of Responsibility** | Middleware pipeline — each middleware passes to the next via `call_next()` |
+| **Strategy** | Pluggable authentication backends (JWT vs API Key vs OAuth) |
+| **Singleton** | Config object loaded once and shared globally |
+| **Observer** | Event/hook system — plugins subscribe to events like `on_request_start` |
+| **Factory** | `create_app()` function that wires all components together |
+
+---
+
+### Q. How did you get other teams to adopt the internal framework?
+**Answer:** Adoption is a social and documentation problem, not a technical one.
+1. **Documentation First**: Wrote a clear README with a 5-minute "Getting Started" guide. If a developer cannot integrate it in 5 minutes, nobody will use it.
+2. **Provided Migration Scripts**: For existing services, provided a script that auto-generated the framework configuration based on their existing `settings.py`.
+3. **Low Risk First**: Convinced one team to adopt just the logging module first (lowest risk), not the entire framework.
+4. **Internal Champions**: Found one enthusiastic developer on each team and made them the "champion." They helped their teammates when issues arose.
+5. **SLA Commitment**: Committed to a 24-hour SLA to fix any critical bugs that blocked teams using the framework.
+
+---
+
+### Q. How do you measure the quality and performance of a framework?
+**Answer:**
+- **Performance Benchmarks**: Using `locust` or `wrk` to run load tests and measure requests/second and p99 latency.
+- **Code Coverage**: Maintaining >90% test coverage using `pytest-cov`.
+- **Import Time**: Measuring how long the framework takes to import (`python -c "import time; t=time.time(); import my_framework; print(time.time()-t)"`). A slow import hurts startup time in serverless/Lambda environments.
+- **Bundle Size**: Keeping dependencies minimal to reduce installation time and Docker image sizes.
+- **Developer Satisfaction**: Quarterly survey to teams using the framework asking "How easy was it to debug an issue?" and "Would you recommend it?"
 
 ---
 
