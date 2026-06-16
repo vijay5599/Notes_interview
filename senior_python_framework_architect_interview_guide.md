@@ -34,6 +34,18 @@ These terms represent a hierarchy of scale and a shift in control.
 *   **Library**: A toolbox. You take out a hammer (function) whenever *you* decide you need to hit a nail.
 *   **Framework**: The blueprint and foundation of a house. It defines where the walls go. You just paint the walls and fill the rooms (write the business logic), but the house structure is already built and dictates the layout.
 
+**Quick Comparison Table:**
+
+| Feature | Module | Package | Library | Framework |
+|---|---|---|---|---|
+| **What it is** | Single `.py` file | Directory of modules | Bundled packages | Application skeleton |
+| **Size** | Smallest | Small | Medium | Large |
+| **Who calls who?** | You call it | You call it | **You call it** | **It calls your code** |
+| **Control flow** | You control | You control | You control | Framework controls |
+| **Has structure rules?** | No | No | No | **Yes** |
+| **Real Example** | `utils.py` | `user_auth/` folder | `requests`, `pandas` | `FastAPI`, `Django` |
+| **Analogy** | A brick | A wall | A toolbox | A house blueprint |
+
 ### Q: How does Python memory management work?
 **Answer:** Python abstracts memory management using a private heap. 
 1.  **Reference Counting**: Every object keeps track of how many variables point to it. 
