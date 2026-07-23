@@ -1767,4 +1767,428 @@ print(order_service2.create_order("Order #456"))  # Saving to PostgreSQL
 9. **Understand memory management and garbage collection**
 10. **Practice implementing complete OOP examples**
 
-This study guide covers all the essential Python OOP concepts commonly asked in interviews. Practice implementing these concepts with real-world examples to solidify your understanding. 
+This study guide covers all the essential Python OOP concepts commonly asked in interviews. Practice implementing these concepts with real-world examples to solidify your understanding.
+
+---
+
+## 🟢 Simple OOP Examples (Quick Reference)
+
+> These are short, easy-to-remember programs for each OOP concept. Great for last-minute revision!
+
+---
+
+### ✅ 1. Class & Object (Simplest Form)
+
+```python
+class Dog:
+    def __init__(self, name):
+        self.name = name          # instance variable
+
+    def bark(self):
+        print(f"{self.name} says Woof!")
+
+d = Dog("Tommy")
+d.bark()   # Tommy says Woof!
+```
+
+---
+
+### ✅ 2. `__init__` Constructor
+
+```python
+class Student:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+
+s = Student("Alice", 20)
+print(s.name, s.age)   # Alice 20
+```
+
+---
+
+### ✅ 3. Class Variable vs Instance Variable
+
+```python
+class Car:
+    wheels = 4          # class variable (shared by all)
+
+    def __init__(self, color):
+        self.color = color   # instance variable (unique to each)
+
+c1 = Car("Red")
+c2 = Car("Blue")
+
+print(c1.wheels)   # 4
+print(c2.color)    # Blue
+print(Car.wheels)  # 4  (access via class name)
+```
+
+---
+
+### ✅ 4. Inheritance (Parent → Child)
+
+```python
+class Animal:
+    def speak(self):
+        print("Animal makes a sound")
+
+class Dog(Animal):         # Dog inherits from Animal
+    def speak(self):       # method overriding
+        print("Dog barks!")
+
+a = Animal()
+a.speak()   # Animal makes a sound
+
+d = Dog()
+d.speak()   # Dog barks!
+```
+
+---
+
+### ✅ 5. `super()` — Calling Parent Constructor
+
+```python
+class Person:
+    def __init__(self, name):
+        self.name = name
+
+class Employee(Person):
+    def __init__(self, name, emp_id):
+        super().__init__(name)    # call parent __init__
+        self.emp_id = emp_id
+
+e = Employee("Bob", 101)
+print(e.name, e.emp_id)   # Bob 101
+```
+
+---
+
+### ✅ 6. Encapsulation (Private Variables)
+
+```python
+class BankAccount:
+    def __init__(self, balance):
+        self.__balance = balance   # private variable
+
+    def get_balance(self):
+        return self.__balance       # controlled access
+
+    def deposit(self, amount):
+        self.__balance += amount
+
+acc = BankAccount(1000)
+acc.deposit(500)
+print(acc.get_balance())   # 1500
+# print(acc.__balance)     # ❌ AttributeError
+```
+
+---
+
+### ✅ 7. Polymorphism (Same method, different classes)
+
+```python
+class Cat:
+    def sound(self):
+        return "Meow"
+
+class Dog:
+    def sound(self):
+        return "Woof"
+
+class Cow:
+    def sound(self):
+        return "Moo"
+
+animals = [Cat(), Dog(), Cow()]
+
+for animal in animals:
+    print(animal.sound())   # Meow, Woof, Moo
+```
+
+---
+
+### ✅ 8. Abstraction (Using ABC)
+
+```python
+from abc import ABC, abstractmethod
+
+class Shape(ABC):
+    @abstractmethod
+    def area(self):
+        pass
+
+class Circle(Shape):
+    def __init__(self, r):
+        self.r = r
+
+    def area(self):
+        return 3.14 * self.r * self.r
+
+c = Circle(5)
+print(c.area())   # 78.5
+
+# Shape()  # ❌ Can't instantiate abstract class
+```
+
+---
+
+### ✅ 9. Method Overriding
+
+```python
+class Parent:
+    def greet(self):
+        print("Hello from Parent")
+
+class Child(Parent):
+    def greet(self):               # overrides parent method
+        print("Hello from Child")
+
+p = Parent()
+p.greet()   # Hello from Parent
+
+c = Child()
+c.greet()   # Hello from Child
+```
+
+---
+
+### ✅ 10. Method Overloading (Using default args)
+
+```python
+class Calculator:
+    def add(self, a, b=0, c=0):
+        return a + b + c
+
+calc = Calculator()
+print(calc.add(5))        # 5
+print(calc.add(5, 3))     # 8
+print(calc.add(5, 3, 2))  # 10
+```
+
+---
+
+### ✅ 11. `@classmethod` vs `@staticmethod`
+
+```python
+class MyClass:
+    count = 0
+
+    def __init__(self):
+        MyClass.count += 1
+
+    @classmethod
+    def get_count(cls):          # has access to class
+        return cls.count
+
+    @staticmethod
+    def greet():                 # no access to class or instance
+        return "Hello!"
+
+obj1 = MyClass()
+obj2 = MyClass()
+
+print(MyClass.get_count())  # 2
+print(MyClass.greet())      # Hello!
+```
+
+---
+
+### ✅ 12. Magic / Dunder Methods
+
+```python
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __str__(self):           # called by print()
+        return f"Point({self.x}, {self.y})"
+
+    def __add__(self, other):    # called by +
+        return Point(self.x + other.x, self.y + other.y)
+
+p1 = Point(1, 2)
+p2 = Point(3, 4)
+
+print(p1)         # Point(1, 2)
+print(p1 + p2)    # Point(4, 6)
+```
+
+---
+
+### ✅ 13. Multiple Inheritance
+
+```python
+class A:
+    def hello(self):
+        print("Hello from A")
+
+class B:
+    def world(self):
+        print("World from B")
+
+class C(A, B):    # inherits from both A and B
+    pass
+
+obj = C()
+obj.hello()   # Hello from A
+obj.world()   # World from B
+```
+
+---
+
+### ✅ 14. MRO — Method Resolution Order
+
+```python
+class A:
+    def show(self):
+        print("A")
+
+class B(A):
+    def show(self):
+        print("B")
+
+class C(A):
+    def show(self):
+        print("C")
+
+class D(B, C):   # Diamond problem
+    pass
+
+d = D()
+d.show()                          # B  (follows MRO)
+print(D.__mro__)                  # D -> B -> C -> A -> object
+```
+
+---
+
+### ✅ 15. Composition ("has-a" relationship)
+
+```python
+class Engine:
+    def start(self):
+        return "Engine started"
+
+class Car:
+    def __init__(self):
+        self.engine = Engine()    # Car HAS-A Engine
+
+    def drive(self):
+        return self.engine.start() + " → Car moving"
+
+my_car = Car()
+print(my_car.drive())   # Engine started → Car moving
+```
+
+---
+
+### ✅ 16. Property Decorator (Getter & Setter)
+
+```python
+class Person:
+    def __init__(self, name):
+        self._name = name
+
+    @property
+    def name(self):              # getter
+        return self._name
+
+    @name.setter
+    def name(self, value):       # setter
+        if value:
+            self._name = value
+
+p = Person("Alice")
+print(p.name)     # Alice
+p.name = "Bob"
+print(p.name)     # Bob
+```
+
+---
+
+### ✅ 17. Singleton Design Pattern (Simplest)
+
+```python
+class Singleton:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+a = Singleton()
+b = Singleton()
+
+print(a is b)   # True  (both point to same object)
+```
+
+---
+
+### ✅ 18. `__slots__` (Memory Optimization)
+
+```python
+class Point:
+    __slots__ = ['x', 'y']   # only these attributes allowed
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(1, 2)
+print(p.x, p.y)   # 1 2
+# p.z = 3         # ❌ AttributeError (not in __slots__)
+```
+
+---
+
+### ✅ 19. Data Hiding (Name Mangling)
+
+```python
+class Secret:
+    def __init__(self):
+        self.public = "visible"
+        self._protected = "semi-hidden"
+        self.__private = "hidden"   # name mangling
+
+s = Secret()
+print(s.public)              # visible
+print(s._protected)          # semi-hidden  (accessible but not recommended)
+# print(s.__private)         # ❌ AttributeError
+print(s._Secret__private)    # hidden  (name mangling workaround)
+```
+
+---
+
+### ✅ 20. Simple SOLID — Single Responsibility
+
+```python
+# ❌ BAD: One class doing everything
+class Report:
+    def generate(self): pass
+    def save_to_db(self): pass    # should not be here
+    def send_email(self): pass    # should not be here
+
+# ✅ GOOD: Each class has one job
+class Report:
+    def generate(self):
+        return "Report data"
+
+class ReportSaver:
+    def save(self, report):
+        print("Saved:", report)
+
+class EmailSender:
+    def send(self, report):
+        print("Emailed:", report)
+
+r = Report()
+data = r.generate()
+ReportSaver().save(data)
+EmailSender().send(data)
+```
+
+---
+
+> 💡 **Tip:** These simple examples are enough to explain any OOP concept in 2-3 sentences during an interview. Always mention the concept name → definition → quick code example.

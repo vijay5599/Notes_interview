@@ -18,24 +18,6 @@
 9. [Behavioral Questions (STAR)](#9-behavioral-questions-star-format)
 
 ---
-
-## 🗂️ Your 12 Questions — Categorized
-
-| # | Your Question | Section | Question # | Status |
-|---|---|---|---|---|
-| 1 | How did you debug any issue in production? | §5 Production & Debugging | Q24 | ✅ Covered |
-| 2 | What is Dependency Injection and its types? | §1 Core Backend | Q1 | ✅ Covered |
-| 3 | What is Indexing and its types? | §4 Database | Q18 | ✅ Covered |
-| 4 | How did you handle global level exception/errors? | §2 FastAPI / §3 Node.js | Q12, Q15 | ✅ Covered |
-| 5 | What is Serverless Functions? | §1 Core Backend | **Q9-A** | 🆕 Added |
-| 6 | How did you handle load if lot of users come? | §5 Production & Debugging | Q27 | ✅ Covered |
-| 7 | What is Middleware? What is AuthN & AuthZ? | §1 Core Backend | Q2, Q3 | ✅ Covered |
-| 8 | How did you handle RBAC? | §1 Core Backend | **Q3-B** | 🆕 Added |
-| 9 | What projects you worked on — explain? | §9 Behavioral | **Q42** | 🆕 Added |
-| 10 | What is Event Loop? | §3 Node.js | Q14 | ✅ Covered |
-| 11 | What is Sharding, Partitioning? | §4 Database | **Q23-A** | 🆕 Added |
-| 12 | What is Cluster Module? | §3 Node.js | Q16 | ✅ Covered |
-
 ---
 
 # 1. Core Backend Concepts
