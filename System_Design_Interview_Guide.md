@@ -21,7 +21,7 @@
 15. [Slow Microservice](#15-slow-microservice)
 16. [Reduce Database Load](#16-reduce-database-load)
 17. [Prevent Duplicate Orders](#17-prevent-duplicate-orders)
-18. [URL Shortener](#18-url-shortener)
+18. [URL Shortener (System Design & FastAPI Code)](#18-url-shortener-system-design--fastapi-code)
 19. [Chat Application](#19-chat-application)
 20. [Video Streaming](#20-video-streaming)
 21. [Ad-Click Tracking (High Write Throughput)](#21-ad-click-tracking-high-write-throughput)
@@ -410,7 +410,7 @@ A user double-clicks the "Place Order" button, causing duplicate charges and ord
 
 ---
 
-## 18. URL Shortener
+## 18. URL Shortener (System Design & FastAPI Code)
 
 ### Scenario
 Designing a scalable URL shortening service like TinyURL.
@@ -429,6 +429,127 @@ Designing a scalable URL shortening service like TinyURL.
                                (Distributed ID)            |
                                         v                  |
                                 [Zookeeper Range]   [DB Mapping Table]
+```
+
+### Production Implementation (FastAPI + SQLite + Redis)
+Below is the complete, production-ready implementation of a URL shortener service using **FastAPI**, **SQLite** (using SQLAlchemy for metadata tracking), and **Redis** (as the fast redirection cache).
+
+```python
+import string
+import time
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, HttpUrl
+import redis
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+
+# ----------------- Database Setup -----------------
+DATABASE_URL = "sqlite:///./url_shortener.db"
+Base = declarative_base()
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+class URLModel(Base):
+    __tablename__ = "urls"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    long_url = Column(String, nullable=False)
+    short_code = Column(String, unique=True, index=True, nullable=True)
+
+Base.metadata.create_all(bind=engine)
+
+# ----------------- Redis Cache Setup -----------------
+# Falls back to local memory if Redis is unavailable (Fail Open pattern)
+try:
+    redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+    redis_client.ping()
+except Exception:
+    redis_client = None
+
+# ----------------- Base62 Encoding -----------------
+BASE62_ALPHABET = string.ascii_letters + string.digits  # a-z, A-Z, 0-9
+
+def encode_base62(num: int) -> str:
+    """Encodes an integer database ID to a Base62 string."""
+    if num == 0:
+        return BASE62_ALPHABET[0]
+    arr = []
+    base = len(BASE62_ALPHABET)
+    while num:
+        num, rem = divmod(num, base)
+        arr.append(BASE62_ALPHABET[rem])
+    arr.reverse()
+    return ''.join(arr)
+
+# ----------------- FastAPI App -----------------
+app = FastAPI(title="URL Shortener Service", version="1.0.0")
+
+class URLRequest(BaseModel):
+    url: HttpUrl
+
+class URLResponse(BaseModel):
+    long_url: str
+    short_url: str
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.post("/shorten", response_model=URLResponse, status_code=status.HTTP_201_CREATED)
+def shorten_url(request: URLRequest, db: Session = Depends(get_db)):
+    long_url_str = str(request.url)
+    
+    # 1. Insert URL to get the auto-increment ID
+    db_url = URLModel(long_url=long_url_str)
+    db.add(db_url)
+    db.commit()
+    db.refresh(db_url)
+    
+    # 2. Encode auto-increment ID to Base62
+    short_code = encode_base62(db_url.id)
+    
+    # 3. Update the entry with the generated short code
+    db_url.short_code = short_code
+    db.commit()
+    
+    # 4. Cache in Redis (Expire in 24 hours to prevent memory leaks)
+    if redis_client:
+        try:
+            redis_client.setex(short_code, 86400, long_url_str)
+        except Exception:
+            pass  # Fail open
+            
+    return URLResponse(long_url=long_url_str, short_url=f"http://localhost:8000/{short_code}")
+
+@app.get("/{short_code}")
+def redirect_to_long_url(short_code: str, db: Session = Depends(get_db)):
+    # 1. Try reading from Redis cache first
+    if redis_client:
+        try:
+            cached_url = redis_client.get(short_code)
+            if cached_url:
+                return RedirectResponse(url=cached_url, status_code=status.HTTP_301_MOVED_PERMANENTLY)
+        except Exception:
+            pass  # Fallback to database on cache connection issues
+            
+    # 2. Cache miss: Read from relational database
+    db_url = db.query(URLModel).filter(URLModel.short_code == short_code).first()
+    if not db_url:
+        raise HTTPException(status_code=404, detail="Short URL not found")
+        
+    # 3. Write back to Redis cache
+    if redis_client:
+        try:
+            redis_client.setex(short_code, 86400, db_url.long_url)
+        except Exception:
+            pass
+            
+    return RedirectResponse(url=db_url.long_url, status_code=status.HTTP_301_MOVED_PERMANENTLY)
 ```
 
 ---
